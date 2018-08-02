@@ -2,16 +2,17 @@
 """ usage: doit.py [options]
 
 Options:
-    --init              performs an initial run which will not publish all new events
-    --clean             removes the database at startup
-    --mock              mock the requests and use events.json and series.json locally
-    --lol=LEVEL         set log level [Default: INFO]
-    --days=D            Offset in days when to announce an event (starting 0:00) [Default: 0]
-    --hours=H           Offset in hours [Default: 11]
-    --minutes=M         Offset in minutes [Default: 30]
-    --twitter-creds=FILE    Path to the twitter credential file
+    --init                   performs an initial run which will not publish all new events
+    --clean                  removes the database at startup
+    --mock                   mock the requests and use events.json and series.json locally
+    --lol=LEVEL              set log level [Default: INFO]
+    --days=D                 Offset in days when to announce an event (starting 0:00) [Default: 0]
+    --hours=H                Offset in hours [Default: 11]
+    --minutes=M              Offset in minutes [Default: 30]
+    --twitter-creds=FILE     Path to the twitter credential file
     --mastodon-creds=FILE    Path to the mastodon credential file
-    --state=FILE            Path to state file [Default: state.db]
+    --facebook-creds=FILE    Path to the facebook credential file
+    --state=FILE             Path to state file [Default: state.db]
 
 By default we announce a new event at 12:30 the day before
 """
@@ -52,7 +53,7 @@ hi_list = [
     "Bitte entschuldigen Sie die Störung,",
     "*Räusper*",
     "YO!",
-    "Rosen sind Rot, Pfeilchen sind Blau,",
+    "Rosen sind Rot, Veilchen sind Blau,",
     "Dein Events Service informiert:",
     "Nachricht aus dem Äther:",
     "In deinem Lieblingshackerspace:",
@@ -105,6 +106,16 @@ def announce(text, creds):
         log.error("Unable to announce to mastodon")
         log.info(f"Error Reason: {e}")
 
+def announce_facebook(text, credfile):
+    import facebook
+
+
+    # graph = GraphAPI(graphApiAccessToken)
+    with open(credfile) as f:
+        graph = facebook.GraphAPI(access_token=json.load(f), version="2.12")
+    groups = graph.get_object("me/groups")
+    group_id = groups['data'][0]['id']
+    graph.put_object(group_id, "feed", message=text)
 
 def announce_mastodon(text, credfile, visibility="unlisted"):
     from mastodon import Mastodon
@@ -279,22 +290,23 @@ def main():
     import locale
 
     locale.setlocale(locale.LC_ALL, "de_DE.UTF-8")
-
+    statefile = args["state"]
     if args["--clean"]:
         try:
-            remove(statefile)
+            remove()
             log.info(f"successfully removed {statefile}, setting init to True")
             args["--init"] = True
         except Exception as e:
             log.error(f"cannot remove {statefile}: {e}")
     # always perform an init after a clean!
-    creds = {"mastodon": args["--mastodon-creds"], "twitter": args["--twitter-creds"]}
+    creds = {"mastodon": args["--mastodon-creds"], "twitter":
+            args["--twitter-creds"], "facebook": args['--facebook-creds']}
     offset = timedelta(
         days=int(args["--days"]),
         hours=int(args["--hours"]),
         minutes=int(args["--minutes"]),
     )  # every day at 12:30
-    update(offset, creds, state=args["state"], init=args["--init"], mock=args["--mock"])
+    update(offset, creds, state=statefile, init=args["--init"], mock=args["--mock"])
 
 
 if __name__ == "__main__":
