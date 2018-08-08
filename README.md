@@ -27,7 +27,8 @@ see `shack_announce/autenticate.py` , you need:
   "mastodon": {
     "client_id": "",
     "client_secret": "",
-    "access_token": ""
+    "access_token": "",
+    "visibility": "unlisted"
   }
 }
 ```
