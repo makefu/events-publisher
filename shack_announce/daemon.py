@@ -41,7 +41,7 @@ from dateutil.parser import *
 from datetime import *
 import pytz
 
-now = datetime.now(pytz.timezone('Europe/Berlin'))
+now = datetime.now(pytz.timezone("Europe/Berlin"))
 
 hi_list = [
     "+++ BREAKING +++",
@@ -89,10 +89,9 @@ def days_till(event):
 
 
 def next_series_date(event):
-    return (
-        rrulestr(event["rrule"], dtstart=now)
-        .between(now, now + timedelta(days=365))[0]
-    )
+    return rrulestr(event["rrule"], dtstart=now).between(
+        now, now + timedelta(days=365)
+    )[0]
 
 
 def announce(text, creds):
@@ -121,11 +120,13 @@ def announce_facebook(text, cred, group_id=122027937823921):  # shackspace page
 def announce_mastodon(text, cred):
     from mastodon import Mastodon
 
-    visibility = cred.get('visibility','unlisted')
-    mastodon = Mastodon(client_id=cred['client_id'],
-                        client_secret=cred['client_secret'],
-                        access_token=cred['access_token'],
-                        api_base_url="https://chaos.social")
+    visibility = cred.get("visibility", "unlisted")
+    mastodon = Mastodon(
+        client_id=cred["client_id"],
+        client_secret=cred["client_secret"],
+        access_token=cred["access_token"],
+        api_base_url="https://chaos.social",
+    )
     mastodon.status_post(text, visibility=visibility)
 
 
@@ -142,8 +143,10 @@ def update(offset, creds, statefile="state.db", init=False, mock=False):
             )
         )
         new_series = requests.get("https://events-api.shackspace.de/series/").json()
-    try: state = json.load(open(statefile))
-    except: state = {}
+    try:
+        state = json.load(open(statefile))
+    except:
+        state = {}
 
     if not "events" in state:
         log.info("Creating new state events")
@@ -156,33 +159,40 @@ def update(offset, creds, statefile="state.db", init=False, mock=False):
         log.info("Will not publish the new events")
         for e in events:
             if "announce" not in e:
-                e["announce"] = { "new": True, "tomorrow": False }
+                e["announce"] = {"new": True, "tomorrow": False}
             if within_offset(e, offset):
-                log.debug( f"event {e['name']} is within offset")
+                log.debug(f"event {e['name']} is within offset")
                 e["announce"]["tomorrow"] = True
         for s in series:
             if "announce" not in s:
-                s["announce"] = { "new": True, "tomorrow": False }
+                s["announce"] = {"new": True, "tomorrow": False}
             next_event = next_series_date(s)
-            try:    event_start = datetime.strptime(s["start"], "%H:%M:%S")
-            except: event_start = datetime.strptime(s["time"], "%H:%M:%S")
-            next_event = next_event.replace(
-                hour=event_start.hour,
-                minute=event_start.minute,
-                second=event_start.second,
-                tzinfo=None
-            ).astimezone(pytz.timezone('Europe/Berlin')).isoformat()
+            try:
+                event_start = datetime.strptime(s["start"], "%H:%M:%S")
+            except:
+                event_start = datetime.strptime(s["time"], "%H:%M:%S")
+            next_event = (
+                next_event.replace(
+                    hour=event_start.hour,
+                    minute=event_start.minute,
+                    second=event_start.second,
+                    tzinfo=None,
+                )
+                .astimezone(pytz.timezone("Europe/Berlin"))
+                .isoformat()
+            )
             # start is actually the time when the event begins
             # we want to recycle nextday, which uses event['start'] so we override
             s["time"] = s["start"]
             s["start"] = next_event
             if within_offset(s, offset):
-                log.info( f"series {s['name']} is within offset")
+                log.info(f"series {s['name']} is within offset")
                 s["announce"]["tomorrow"] = True
 
     # update events / optionally announce
     for e in events:
-        if "announce" not in e: e["announce"] = { "new": False, "tomorrow": False }
+        if "announce" not in e:
+            e["announce"] = {"new": False, "tomorrow": False}
         log.debug(f"in announce for event {e['name']}, id {e['id']}")
         hi = choice(hi_list)
         # 2. August (Donnerstag), 17 Uhr
@@ -203,26 +213,19 @@ def update(offset, creds, statefile="state.db", init=False, mock=False):
         url = f"https://events.shackspace.de/events/{e['id']}"
         name = e["name"]
         optmin = ":%M" if parse(e["start"]).minute else ""
-        ts = datetime.strftime(
-            parse(e["start"]),
-            f"%d. %B (%A), %-H{optmin} Uhr"
-        )
+        ts = datetime.strftime(parse(e["start"]), f"%d. %B (%A), %-H{optmin} Uhr")
 
-
-        if not e["announce"].get("new",False):
+        if not e["announce"].get("new", False):
             log.info(f"{e['name']} has not been announced yet and is new")
             announce(f"{hi} Neues Event '{name}' am {ts} - {url}", creds)
             e["announce"]["new"] = True
         elif (not e["announce"]["tomorrow"]) and within_offset(e, offset):
-                log.info(
-                    f"event {e['name']} is within offset and has not been announced yet"
-                )
-                e["announce"]["tomorrow"] = True
-                # announce(f"{hi} Event '{name}' Tagen am {ts} - {url}")
-                announce(
-                    f"{hi} Morgen, am {ts} ist '{name}' im shackspace - {url}",
-                    creds,
-                )
+            log.info(
+                f"event {e['name']} is within offset and has not been announced yet"
+            )
+            e["announce"]["tomorrow"] = True
+            # announce(f"{hi} Event '{name}' Tagen am {ts} - {url}")
+            announce(f"{hi} Morgen, am {ts} ist '{name}' im shackspace - {url}", creds)
     for s in series:
         log.debug(s)
         log.debug(f"in announce for series {s['name']}, id {s['id']}")
@@ -231,28 +234,30 @@ def update(offset, creds, statefile="state.db", init=False, mock=False):
 
         for ns in new_series:
             if s["id"] == ns["id"]:
-                log.debug("found series with same id in new events, updating and keeping old start date")
-                last_event = s['start']
+                log.debug(
+                    "found series with same id in new events, updating and keeping old start date"
+                )
+                last_event = s["start"]
                 try:
                     datetime.strptime(s["start"], "%H:%M:%S")
-                    s['time'] = ns['start']
-                except: pass
+                    s["time"] = ns["start"]
+                except:
+                    pass
                 s.update(ns)
-                s['start'] = last_event
+                s["start"] = last_event
                 break
         else:
             log.info("event not found in new events, skipping")
             continue
 
-        if "announce" not in s: s["announce"] = { "new": False, "tomorrow": False }
+        if "announce" not in s:
+            s["announce"] = {"new": False, "tomorrow": False}
         # find next event date logic
 
         # 2. August (Donnerstag), 17 Uhr
         name = s["name"]
         optmin = ":%M" if parse(s["start"]).minute else ""
-        ts = datetime.strftime(
-            parse(s["start"]), f"%d. %B (%A), %-H{optmin} Uhr"
-        )
+        ts = datetime.strftime(parse(s["start"]), f"%d. %B (%A), %-H{optmin} Uhr")
 
         next_event = next_series_date(s)
         # start is actually the time when the event begins
@@ -262,22 +267,26 @@ def update(offset, creds, statefile="state.db", init=False, mock=False):
                 "'time' is not in series, saving original start date to 'time' key"
             )
             s["time"] = s["start"]
-        try:    event_start = datetime.strptime(s["start"], "%H:%M:%S")
-        except: event_start = datetime.strptime(s["time"], "%H:%M:%S")
-        next_event = next_event.replace(
-            hour=event_start.hour,
-            minute=event_start.minute,
-            second=event_start.second,
-            tzinfo=None
-        ).astimezone(pytz.timezone('Europe/Berlin')).isoformat()
+        try:
+            event_start = datetime.strptime(s["start"], "%H:%M:%S")
+        except:
+            event_start = datetime.strptime(s["time"], "%H:%M:%S")
+        next_event = (
+            next_event.replace(
+                hour=event_start.hour,
+                minute=event_start.minute,
+                second=event_start.second,
+                tzinfo=None,
+            )
+            .astimezone(pytz.timezone("Europe/Berlin"))
+            .isoformat()
+        )
 
         # if series has not been announced and is new: annouce as "new series on ... at ... + link`
-        if not s["announce"].get("new",False):
+        if not s["announce"].get("new", False):
             log.info(f"{s['name']} has not been announced yet and is new")
             s["announce"]["new"] = True
-            announce(
-                f"{hi} Neue Serie '{name}', nächster Termin {ts} - {url}", creds
-            )
+            announce(f"{hi} Neue Serie '{name}', nächster Termin {ts} - {url}", creds)
 
         # if a new date has been calculated, reset the annouce flag
         if s["start"] != next_event:
@@ -288,21 +297,20 @@ def update(offset, creds, statefile="state.db", init=False, mock=False):
             log.debug(f"start date stays the same {next_event}")
 
         # if series is in the next day and has not been announced: announce as `tomorrow at ... starts`
-        is_announced = s["announce"].get("tomorrow",False)
+        is_announced = s["announce"].get("tomorrow", False)
         is_next = within_offset(s, offset)
-        log.debug(f"Event is announced?: {is_announced} ({s['announce']}), event tomorrow?: {is_next}")
+        log.debug(
+            f"Event is announced?: {is_announced} ({s['announce']}), event tomorrow?: {is_next}"
+        )
         if not is_announced and is_next:
-            log.info(
-                f"series {s['name']} is within offset, setting announce to true"
-            )
-            announce(
-                f"{hi} Morgen, am {ts} ist '{name}' im shackspace - {url}", creds
-            )
+            log.info(f"series {s['name']} is within offset, setting announce to true")
+            announce(f"{hi} Morgen, am {ts} ist '{name}' im shackspace - {url}", creds)
             s["announce"]["tomorrow"] = True
 
     state["events"] = events
     state["series"] = series
-    with open(statefile,"w+") as f: json.dump(state,f)
+    with open(statefile, "w+") as f:
+        json.dump(state, f)
 
 
 def main():
@@ -323,7 +331,7 @@ def main():
         # always perform an init after a clean!
         except Exception as e:
             log.error(f"cannot remove {statefile}: {e}")
-    with open(args['--creds']) as f:
+    with open(args["--creds"]) as f:
         creds = json.load(f)
     offset = timedelta(
         days=int(args["--days"]),
