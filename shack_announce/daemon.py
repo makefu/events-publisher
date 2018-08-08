@@ -96,11 +96,13 @@ def next_series_date(event):
 
 def announce(text, creds):
     log.info(f"Announcing {text}")
-    try:
-        announce_mastodon(text, cred=creds["mastodon"])
-    except Exception as e:
-        log.error("Unable to announce to mastodon")
-        log.info(f"Error Reason: {e}")
+    for name,cred in creds.get('mastodon',{}).items():
+        try:
+            log.info(f"Announcing to {name} -> {cred['url']}")
+            announce_mastodon(text, cred=cred)
+        except Exception as e:
+            log.error("Unable to announce to mastodon {name} {cred}")
+            log.info(f"Error Reason: {e}")
     try:
         announce_facebook(text, cred=creds["facebook"])
         pass
@@ -125,7 +127,7 @@ def announce_mastodon(text, cred):
         client_id=cred["client_id"],
         client_secret=cred["client_secret"],
         access_token=cred["access_token"],
-        api_base_url="https://chaos.social",
+        api_base_url=cred["url"],
     )
     mastodon.status_post(text, visibility=visibility)
 
