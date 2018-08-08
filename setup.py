@@ -25,8 +25,7 @@ setup(
     packages=['shack_announce'],
     entry_points={
         'console_scripts' : [
-            'announce-daemon = shack_announce.daemon:main',
-            'announce-auth = shack_announce.authenticate:main',
+            'announce-daemon = shack_announce.daemon:main'
             ]
         },
 
