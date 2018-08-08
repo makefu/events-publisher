@@ -18,7 +18,6 @@ By default we announce a new event at 12:30 the day before
 import json
 from os import remove
 import requests
-import shelve
 import logging
 from random import choice
 import sys
@@ -119,7 +118,7 @@ def announce_facebook(text, cred, group_id=122027937823921):  # shackspace page
     graph.put_object(group_id, "feed", message=text)
 
 
-def announce_mastodon(text, cred, visibility="private"):
+def announce_mastodon(text, cred, visibility="public"):
     from mastodon import Mastodon
 
     mastodon = Mastodon(client_id=cred['client_id'],
@@ -132,8 +131,6 @@ def announce_mastodon(text, cred, visibility="private"):
 def update(offset, creds, statefile="state.db", init=False, mock=False):
     # filter all events with no ID as they are part of a series
     if mock:
-        import json
-
         new_events = list(filter(lambda f: f["id"], json.load(open("events.json"))))
         new_series = json.load(open("series.json"))
     else:
@@ -144,8 +141,8 @@ def update(offset, creds, statefile="state.db", init=False, mock=False):
             )
         )
         new_series = requests.get("https://events-api.shackspace.de/series/").json()
-
-    state = shelve.open(statefile)
+    try: state = json.load(open(statefile))
+    except: state = {}
 
     if not "events" in state:
         log.info("Creating new state events")
@@ -156,19 +153,18 @@ def update(offset, creds, statefile="state.db", init=False, mock=False):
     series = state["series"]
     if init:
         log.info("Will not publish the new events")
-        for event in events:
-            if not "announce" in event: event["announce"] = {}
-            event["announce"]["new"] = True
-            if within_offset(event, offset):
-                log.debug(
-                    f"event {event['name']} is within offset, setting announce to true"
-                )
-                event["announce"]["tomorrow"] = True
-        for event in series:
-            if not "announce" in event: event["announce"] = {}
-
-            next_event = next_series_date(event)
-            event_start = datetime.strptime(event["start"], "%H:%M:%S")
+        for e in events:
+            if "announce" not in e:
+                e["announce"] = { "new": True, "tomorrow": False }
+            if within_offset(e, offset):
+                log.debug( f"event {e['name']} is within offset")
+                e["announce"]["tomorrow"] = True
+        for s in series:
+            if "announce" not in s:
+                s["announce"] = { "new": True, "tomorrow": False }
+            next_event = next_series_date(s)
+            try:    event_start = datetime.strptime(s["start"], "%H:%M:%S")
+            except: event_start = datetime.strptime(s["time"], "%H:%M:%S")
             next_event = next_event.replace(
                 hour=event_start.hour,
                 minute=event_start.minute,
@@ -177,138 +173,135 @@ def update(offset, creds, statefile="state.db", init=False, mock=False):
             ).astimezone(pytz.timezone('Europe/Berlin')).isoformat()
             # start is actually the time when the event begins
             # we want to recycle nextday, which uses event['start'] so we override
-            event["time"] = event["start"]
-            event["start"] = next_event
-            event["announce"]["new"] = True
-            if within_offset(event, offset):
+            s["time"] = s["start"]
+            s["start"] = next_event
+            if within_offset(s, offset):
+                log.info( f"series {s['name']} is within offset")
+                s["announce"]["tomorrow"] = True
+
+    # update events / optionally announce
+    for e in events:
+        if "announce" not in e: e["announce"] = { "new": False, "tomorrow": False }
+        log.debug(f"in announce for event {e['name']}, id {e['id']}")
+        hi = choice(hi_list)
+        # 2. August (Donnerstag), 17 Uhr
+        days = int(days_till(e))
+        if inthepast(e):
+            log.debug(f"Skipping {e['name']} because start date is in the past")
+            continue
+
+        for ne in new_events:
+            if e["id"] == ne["id"]:
+                log.debug("found event with same id  {e['id']} in new events, updating")
+                e.update(ne)
+                break
+        else:
+            log.info("event not found in new events, skipping")
+            continue
+
+        url = f"https://events.shackspace.de/events/{e['id']}"
+        name = e["name"]
+        optmin = ":%M" if parse(e["start"]).minute else ""
+        ts = datetime.strftime(
+            parse(e["start"]),
+            f"%d. %B (%A), %-H{optmin} Uhr"
+        )
+
+
+        if not e["announce"].get("new",False):
+            log.info(f"{e['name']} has not been announced yet and is new")
+            announce(f"{hi} Neues Event '{name}' am {ts} - {url}", creds)
+            e["announce"]["new"] = True
+        elif (not e["announce"]["tomorrow"]) and within_offset(e, offset):
                 log.info(
-                    f"series {event['name']} is within offset, setting announce to true"
+                    f"event {e['name']} is within offset and has not been announced yet"
                 )
-                event["announce"]["tomorrow"] = True
-    else: # update events / optionally announce
-        for event in events:
-            log.debug(f"in announce for event {event['name']}, id {event['id']}")
-            hi = choice(hi_list)
-            # 2. August (Donnerstag), 17 Uhr
-            days = int(days_till(event))
-            if inthepast(event):
-                log.debug(f"Skipping {event['name']} because start date is in the past")
-                continue
+                e["announce"]["tomorrow"] = True
+                # announce(f"{hi} Event '{name}' Tagen am {ts} - {url}")
+                announce(
+                    f"{hi} Morgen, am {ts} ist '{name}' im shackspace - {url}",
+                    creds,
+                )
+    for s in series:
+        log.debug(s)
+        log.debug(f"in announce for series {s['name']}, id {s['id']}")
+        hi = choice(hi_list)
+        url = f"https://events.shackspace.de/series/{s['id']}"
 
-            for nevent in new_events:
-                if event["id"] == nevent["id"]:
-                    log.debug("found event with same id in new events, updating")
-                    event.update(nevent)
-                    break
-            else:
-                log.info("event not found in new events, skipping")
-                continue
+        for ns in new_series:
+            if s["id"] == ns["id"]:
+                log.debug("found series with same id in new events, updating and keeping old start date")
+                last_event = s['start']
+                try:
+                    datetime.strptime(s["start"], "%H:%M:%S")
+                    s['time'] = ns['start']
+                except: pass
+                s.update(ns)
+                s['start'] = last_event
+                break
+        else:
+            log.info("event not found in new events, skipping")
+            continue
 
-            url = f"https://events.shackspace.de/events/{event['id']}"
-            name = event["name"]
-            optmin = ":%M" if parse(event["start"]).minute else ""
-            ts = datetime.strftime(
-                parse(event["start"]), f"%d. %B (%A), %-H{optmin} Uhr"
+        if "announce" not in s: s["announce"] = { "new": False, "tomorrow": False }
+        # find next event date logic
+
+        # 2. August (Donnerstag), 17 Uhr
+        name = s["name"]
+        optmin = ":%M" if parse(s["start"]).minute else ""
+        ts = datetime.strftime(
+            parse(s["start"]), f"%d. %B (%A), %-H{optmin} Uhr"
+        )
+
+        next_event = next_series_date(s)
+        # start is actually the time when the event begins
+        # we want to recycle nextday, which uses event['start'] so we override
+        if "time" not in s:
+            log.debug(
+                "'time' is not in series, saving original start date to 'time' key"
+            )
+            s["time"] = s["start"]
+        try:    event_start = datetime.strptime(s["start"], "%H:%M:%S")
+        except: event_start = datetime.strptime(s["time"], "%H:%M:%S")
+        next_event = next_event.replace(
+            hour=event_start.hour,
+            minute=event_start.minute,
+            second=event_start.second,
+            tzinfo=None
+        ).astimezone(pytz.timezone('Europe/Berlin')).isoformat()
+
+        # if series has not been announced and is new: annouce as "new series on ... at ... + link`
+        if not s["announce"].get("new",False):
+            log.info(f"{s['name']} has not been announced yet and is new")
+            s["announce"]["new"] = True
+            announce(
+                f"{hi} Neue Serie '{name}', nächster Termin {ts} - {url}", creds
             )
 
-            if not "announce" in event: event["announce"] = {}
+        # if a new date has been calculated, reset the annouce flag
+        if s["start"] != next_event:
+            log.info(f"start date changed from {s['start']} to {next_event}")
+            s["start"] = next_event
+            s["announce"]["tomorrow"] = False
+        else:
+            log.debug(f"start date stays the same {next_event}")
 
-            if event["announce"].get("new",False):
-                log.info(f"{event['name']} has not been announced yet and is new")
-                event["announce"]["new"] = True
-                announce(f"{hi} Neues Event '{name}' am {ts} - {url}", creds)
-            elif (
-                event["announce"].get("tomorrow",False)
-            ):
-                if within_offset(event, offset):
-                    log.info(
-                        f"event {event['name']} is within offset and has not been announced yet"
-                    )
-                    event["announce"]["tomorrow"] = True
-                    # announce(f"{hi} Event '{name}' Tagen am {ts} - {url}")
-                    announce(
-                        f"{hi} Morgen, am {ts} ist '{name}' im shackspace - {url}",
-                        creds,
-                    )
-                else:
-                    event["announce"]["tomorrow"] = False
-
-        for event in series:
-            log.debug(f"in announce for series {event['name']}, id {event['id']}")
-            hi = choice(hi_list)
-            url = f"https://events.shackspace.de/series/{event['id']}"
-
-            for nevent in new_series:
-                if event["id"] == nevent["id"]:
-                    log.debug("found series with same id in new events, updating and keeping old start date")
-                    last_event = event['start']
-                    event['time'] = nevent['start']
-                    event.update(nevent)
-                    event['start'] = last_event
-                    break
-            else:
-                log.info("event not found in new events, skipping")
-                continue
-
-            if not "announce" in event: event["announce"] = {}
-            # find next event date logic
-
-            # 2. August (Donnerstag), 17 Uhr
-            name = event["name"]
-            optmin = ":%M" if parse(event["start"]).minute else ""
-            ts = datetime.strftime(
-                parse(event["start"]), f"%d. %B (%A), %-H{optmin} Uhr"
+        # if series is in the next day and has not been announced: announce as `tomorrow at ... starts`
+        is_announced = s["announce"].get("tomorrow",False)
+        is_next = within_offset(s, offset)
+        log.debug(f"Event is announced?: {is_announced} ({s['announce']}), event tomorrow?: {is_next}")
+        if not is_announced and is_next:
+            log.info(
+                f"series {s['name']} is within offset, setting announce to true"
             )
-
-            next_event = next_series_date(event)
-            # start is actually the time when the event begins
-            # we want to recycle nextday, which uses event['start'] so we override
-            if not "time" in event:
-                log.debug(
-                    "'time' is not in event, saving original start date to 'time' key"
-                )
-                event["time"] = event["start"]
-
-            event_start = datetime.strptime(event["time"], "%H:%M:%S")
-            next_event = next_event.replace(
-                hour=event_start.hour,
-                minute=event_start.minute,
-                second=event_start.second,
-                tzinfo=None
-            ).astimezone(pytz.timezone('Europe/Berlin')).isoformat()
-
-            # if series has not been announced and is new: annouce as "new series on ... at ... + link`
-            if event["announce"].get("new",False):
-                log.info(f"{event['name']} has not been announced yet and is new")
-                event["announce"]["new"] = True
-                announce(
-                    f"{hi} Neue Serie '{name}', nächster Termin {ts} - {url}", creds
-                )
-
-            # if a new date has been calculated, reset the annouce flag
-            if event["start"] != next_event:
-                log.info(f"start date changed from {event['start']} to {next_event}")
-                event["start"] = next_event
-                event["announce"]["tomorrow"] = False
-            else:
-                log.debug(f"start date stays the same {next_event}")
-
-            # if series is in the next day and has not been announced: announce as `tomorrow at ... starts`
-            is_not_announced = event["announce"].get("tomorrow",False)
-            is_next = within_offset(event, offset)
-            log.debug(f"Event is not announced?: {is_not_announced} ({event['announce']}), event tomorrow?: {is_next}")
-            if is_not_announced and is_next:
-                log.info(
-                    f"series {event['name']} is within offset, setting announce to true"
-                )
-                announce(
-                    f"{hi} Morgen, am {ts} ist '{name}' im shackspace - {url}", creds
-                )
-                event["announce"]["tomorrow"] = True
+            announce(
+                f"{hi} Morgen, am {ts} ist '{name}' im shackspace - {url}", creds
+            )
+            s["announce"]["tomorrow"] = True
 
     state["events"] = events
     state["series"] = series
-    state.close()
+    with open(statefile,"w+") as f: json.dump(state,f)
 
 
 def main():
@@ -336,6 +329,7 @@ def main():
         hours=int(args["--hours"]),
         minutes=int(args["--minutes"]),
     )  # every day at 12:30
+    log.debug(f"args: {args}")
     update(offset, creds, statefile=statefile, init=args["--init"], mock=args["--mock"])
 
 
