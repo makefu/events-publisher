@@ -24,14 +24,41 @@ The following subsections describe how you can get each token.
 see `shack_announce/autenticate.py` , you need:
 ```json
 {
-  "mastodon": {
-    "client_id": "",
-    "client_secret": "",
-    "access_token": "",
-    "visibility": "unlisted"
+  "mastodon":{
+    "chaos.social": {
+      "client_id": "",
+      "client_secret": "",
+      "access_token": "",
+      "url": "https://chaos.social",
+      "visibility": "unlisted"
+    },
+    "botsin.space": {
+      "client_id": "",
+      "client_secret": "",
+      "access_token": "",
+      "url": "https://botsin.space",
+      "visibility": "public"
+    }
   }
 }
 ```
+```python
+from mastodon import Mastodon
+url = "https://botsin.space"
+user = "your-email"
+pw = "your-pass"
+app = Mastodon.create_app( "shack-publisher", api_base_url=url )
+mastodon = Mastodon(client_id=app[0],client_secret=app[1],api_base_url=url)
+log = mastodon.log_in(user,pw)
+print(json.dumps({
+  "client_id": app[0],
+  "client_secret": app[1],
+  "api_base_url": url,
+  "access_token": log
+},indent=4))
+
+```
+
 
 # Facebook
 1. Create a new app (do not publish)
