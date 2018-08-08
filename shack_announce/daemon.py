@@ -118,9 +118,10 @@ def announce_facebook(text, cred, group_id=122027937823921):  # shackspace page
     graph.put_object(group_id, "feed", message=text)
 
 
-def announce_mastodon(text, cred, visibility="public"):
+def announce_mastodon(text, cred):
     from mastodon import Mastodon
 
+    visibility = cred.get('visibility','unlisted')
     mastodon = Mastodon(client_id=cred['client_id'],
                         client_secret=cred['client_secret'],
                         access_token=cred['access_token'],
