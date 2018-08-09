@@ -66,3 +66,10 @@ print(json.dumps({
 3. Create long-lived access token via the token debug page
 4. use the token in the api explorer to GET `/3.1/<PAGE-ID>?fields=access_token`
    copy the never-expiring token (check via token debug page)
+```json
+{
+  "facebook": {
+    "access_token": "",
+    "groups": [ 122027937823921 ]
+  }
+}
