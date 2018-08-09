@@ -95,41 +95,31 @@ def next_series_date(event):
 
 
 def announce(text, creds):
+    from shack_announce.announce import fb, toot, matrix
+
     log.info(f"Announcing {text}")
     for name,cred in creds.get('mastodon',{}).items():
         try:
-            log.info(f"Announcing to {name} -> {cred['url']}")
-            announce_mastodon(text, cred=cred)
+            toot.announce(text, cred=cred)
+            log.info(f"Announced to {name} -> {cred['url']}")
         except Exception as e:
-            log.error("Unable to announce to mastodon {name} {cred}")
+            log.error(f"Unable to announce to mastodon {name} {cred}")
             log.info(f"Error Reason: {e}")
+
     try:
-        announce_facebook(text, cred=creds["facebook"])
-        pass
+        fb.announce(text, cred=creds["facebook"])
+        log.info(f"Announced to facebook")
     except Exception as e:
         log.error("Unable to announce to facebook")
         log.info(f"Error Reason: {e}")
 
+    try:
+        matrix.announce(text, cred=creds["matrix"])
+        log.info(f"Announced to matrix")
+    except Exception as e:
+        log.error("Unable to announce to matrix")
+        log.info(f"Error Reason: {e}")
 
-def announce_facebook(text, cred, group_id=122027937823921):  # shackspace page
-    import facebook
-
-    # token requires publish_pages permission for shackspace page
-    graph = facebook.GraphAPI(access_token=cred, version="2.12")
-    graph.put_object(group_id, "feed", message=text)
-
-
-def announce_mastodon(text, cred):
-    from mastodon import Mastodon
-
-    visibility = cred.get("visibility", "unlisted")
-    mastodon = Mastodon(
-        client_id=cred["client_id"],
-        client_secret=cred["client_secret"],
-        access_token=cred["access_token"],
-        api_base_url=cred["url"],
-    )
-    mastodon.status_post(text, visibility=visibility)
 
 
 def update(offset, creds, statefile="state.db", init=False, mock=False):
@@ -258,8 +248,6 @@ def update(offset, creds, statefile="state.db", init=False, mock=False):
 
         # 2. August (Donnerstag), 17 Uhr
         name = s["name"]
-        optmin = ":%M" if parse(s["start"]).minute else ""
-        ts = datetime.strftime(parse(s["start"]), f"%d. %B (%A), %-H{optmin} Uhr")
 
         next_event = next_series_date(s)
         # start is actually the time when the event begins
@@ -284,6 +272,8 @@ def update(offset, creds, statefile="state.db", init=False, mock=False):
             .isoformat()
         )
 
+        optmin = ":%M" if parse(next_event).minute else ""
+        ts = datetime.strftime(parse(next_event), f"%d. %B (%A), %-H{optmin} Uhr")
         # if series has not been announced and is new: annouce as "new series on ... at ... + link`
         if not s["announce"].get("new", False):
             log.info(f"{s['name']} has not been announced yet and is new")
