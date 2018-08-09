@@ -76,7 +76,7 @@ def within_offset(event, offset):
 
 def inthepast(event):
     event_end = parse(event["end"])
-    log.debug(f"{event['name']}: {event_end} < {now} ")
+    # log.debug(f"{event['name']}: {event_end} < {now} ")
     return event_end < now
 
 
@@ -125,12 +125,12 @@ def announce(text, creds):
 def update(offset, creds, statefile="state.db", init=False, mock=False):
     # filter all events with no ID as they are part of a series
     if mock:
-        new_events = list(filter(lambda f: f["id"], json.load(open("events.json"))))
+        new_events = list(filter(lambda f: f["id"] and not inthepast(f), json.load(open("events.json"))))
         new_series = json.load(open("series.json"))
     else:
         new_events = list(
             filter(
-                lambda f: f["id"],
+                lambda f: f["id"] and not inthepast(f),
                 requests.get("https://events-api.shackspace.de/events/").json(),
             )
         )
@@ -216,7 +216,6 @@ def update(offset, creds, statefile="state.db", init=False, mock=False):
                 f"event {e['name']} is within offset and has not been announced yet"
             )
             e["announce"]["tomorrow"] = True
-            # announce(f"{hi} Event '{name}' Tagen am {ts} - {url}")
             announce(f"{hi} Morgen, am {ts} ist '{name}' im shackspace - {url}", creds)
     for s in series:
         log.debug(s)
