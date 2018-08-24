@@ -22,7 +22,7 @@ setup(
     setup_requires = [
         "black"
     ],
-    packages=['shack_announce'],
+    packages=['shack_announce','shack_announce.announce'],
     entry_points={
         'console_scripts' : [
             'announce-daemon = shack_announce.daemon:main'
