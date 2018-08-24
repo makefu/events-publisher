@@ -21,6 +21,7 @@ import requests
 import logging
 from random import choice
 import sys
+from .announce import fb, toot, matrix
 
 log = logging.getLogger("daemon")
 
@@ -95,7 +96,6 @@ def next_series_date(event):
 
 
 def announce(text, creds):
-    from shack_announce.announce import fb, toot, matrix
 
     log.info(f"Announcing {text}")
     for name,cred in creds.get('mastodon',{}).items():
