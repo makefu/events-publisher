@@ -125,9 +125,11 @@ def announce(text, creds):
 def update(offset, creds, statefile="state.db", init=False, mock=False):
     # filter all events with no ID as they are part of a series
     if mock:
+        log.debug("using mocked input")
         new_events = list(filter(lambda f: f["id"] and not inthepast(f), json.load(open("events.json"))))
         new_series = json.load(open("series.json"))
     else:
+        log.debug("using events-api input")
         new_events = list(
             filter(
                 lambda f: f["id"] and not inthepast(f),
@@ -145,8 +147,25 @@ def update(offset, creds, statefile="state.db", init=False, mock=False):
         state["events"] = new_events
         state["series"] = new_series
 
+
     events = state["events"]
     series = state["series"]
+    # add new events
+    for ne in new_events:
+        for e in events:
+            if e["id"] == ne["id"]: break
+        else:
+            log.info(f"new event {ne['id']} not found in old events, must be new")
+            events.append(ne)
+    # add new series
+    for ns in new_series:
+        for s in series:
+            if s["id"] == ns["id"]: break
+        else:
+            log.info(f"new series with id {ns['id']} found, adding")
+            series.append(ns)
+
+
     if init:
         log.info("Will not publish the new events")
         for e in events:
@@ -193,15 +212,6 @@ def update(offset, creds, statefile="state.db", init=False, mock=False):
             log.debug(f"Skipping {e['name']} because start date is in the past")
             continue
 
-        for ne in new_events:
-            if e["id"] == ne["id"]:
-                log.debug("found event with same id  {e['id']} in new events, updating")
-                e.update(ne)
-                break
-        else:
-            log.info("event not found in new events, skipping")
-            continue
-
         url = f"https://events.shackspace.de/events/{e['id']}"
         name = e["name"]
         optmin = ":%M" if parse(e["start"]).minute else ""
@@ -217,6 +227,7 @@ def update(offset, creds, statefile="state.db", init=False, mock=False):
             )
             e["announce"]["tomorrow"] = True
             announce(f"{hi} Morgen, am {ts} ist '{name}' im shackspace - {url}", creds)
+
     for s in series:
         log.debug(s)
         log.debug(f"in announce for series {s['name']}, id {s['id']}")
@@ -297,6 +308,8 @@ def update(offset, creds, statefile="state.db", init=False, mock=False):
             log.info(f"series {s['name']} is within offset, setting announce to true")
             announce(f"{hi} Morgen, am {ts} ist '{name}' im shackspace - {url}", creds)
             s["announce"]["tomorrow"] = True
+        else:
+            log.debug(f"will NOT announce {s['name']}")
 
     state["events"] = events
     state["series"] = series

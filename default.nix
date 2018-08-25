@@ -1,7 +1,7 @@
 { pkgs ? import <nixpkgs> {} }:
 pkgs.python3Packages.buildPythonPackage rec {
   pname = "shack_announce";
-  version = "0.0.6";
+  version = "0.0.7";
   propagatedBuildInputs = with pkgs.python3Packages; [
     requests twitter docopt dateutil pytz praw
     ( callPackage ./black.nix {} )
