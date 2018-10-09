@@ -73,3 +73,17 @@ print(json.dumps({
     "groups": [ 122027937823921 ]
   }
 }
+```
+# Twitter
+1. Become developer with application at https://developer.twitter.com
+2. create new app, go to keys and tokens
+3. create all 4 token and secrets
+
+```json
+"twitter": {
+  "consumer_key": "A",
+  "consumer_secret": "B",
+  "token_key": "C",
+  "token_secret": "D",
+}
+```
