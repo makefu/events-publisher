@@ -21,7 +21,7 @@ import requests
 import logging
 from random import choice
 import sys
-from .announce import fb, toot, matrix
+from .announce import fb, toot, matrix, twitter
 
 log = logging.getLogger("daemon")
 
@@ -118,6 +118,13 @@ def announce(text, creds):
         log.info(f"Announced to matrix")
     except Exception as e:
         log.error("Unable to announce to matrix")
+        log.info(f"Error Reason: {e}")
+
+    try:
+        twitter.announce(text, cred=creds["twitter"])
+        log.info(f"Announced to twitter")
+    except Exception as e:
+        log.error("Unable to announce to twitter")
         log.info(f"Error Reason: {e}")
 
 
@@ -325,7 +332,7 @@ def main():
 
     import locale
 
-    locale.setlocale(locale.LC_ALL, "de_DE.UTF-8")
+    locale.setlocale(locale.LC_ALL, 'de_DE.utf8')
     statefile = args["--state"]
     if args["--clean"]:
         try:
