@@ -5,4 +5,4 @@ def announce(text,cred):
                         cred['token_secret'],
                         cred['consumer_key'],
                         cred['consumer_secret']))
-    if not cred.get('mock',False): api.statues.update(status=text)
+    if not cred.get('mock',False): api.statuses.update(status=text)
