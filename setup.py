@@ -3,7 +3,7 @@ from setuptools import setup
 
 setup(
     name='shack_announce',
-    version='0.0.8',
+    version='1.0.0',
 
     description='announce event-o-mat events',
     long_description=open("README.md").read(),

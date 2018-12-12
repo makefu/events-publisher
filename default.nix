@@ -11,7 +11,7 @@ pkgs.python3Packages.buildPythonPackage rec {
     ( callPackage ./mastodon.nix {} )
   ];
   src = ./.;
-  #shellHook =''
-  #  HISTFILE="${toString ./.}/.histfile"
-  #'' ;
+  shellHook =''
+    HISTFILE="${toString ./.}/.histfile"
+  '' ;
 }
