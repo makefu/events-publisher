@@ -14,7 +14,6 @@ Options:
 
 By default we announce a new event at 12:30 the day before
 """
-
 import json
 from os import remove
 import requests
@@ -160,14 +159,23 @@ def update(offset, creds, statefile="state.db", init=False, mock=False):
     # add new events
     for ne in new_events:
         for e in events:
-            if e["id"] == ne["id"]: break
+            if e["id"] == ne["id"]:
+                log.debug("found old info, updating event info")
+                e.update(ne)
+                break
         else:
             log.info(f"new event {ne['id']} not found in old events, must be new")
             events.append(ne)
+
     # add new series
     for ns in new_series:
         for s in series:
-            if s["id"] == ns["id"]: break
+            if s["id"] == ns["id"]:
+                # s.update(ns) - TODO: s['start'] breaks the current logic (override start to the next event)
+                s['time'] = ns['start']
+                s['rrule'] = ns['rrule']
+                s['deleted'] = ns['deleted']
+                break
         else:
             log.info(f"new series with id {ns['id']} found, adding")
             series.append(ns)
@@ -208,10 +216,10 @@ def update(offset, creds, statefile="state.db", init=False, mock=False):
                 s["announce"]["tomorrow"] = True
 
     # update events / optionally announce
-    for e in events:
+    for e in filter(lambda e: not e['deleted'], events):
         if "announce" not in e:
             e["announce"] = {"new": False, "tomorrow": False}
-        log.debug(f"in announce for event {e['name']}, id {e['id']}")
+        log.debug(f"in announce for event {e['name']}, id {e['id']}, announce {e['announce']}")
         hi = choice(hi_list)
         # 2. August (Donnerstag), 17 Uhr
         days = int(days_till(e))
@@ -235,7 +243,7 @@ def update(offset, creds, statefile="state.db", init=False, mock=False):
             e["announce"]["tomorrow"] = True
             announce(f"{hi} Morgen, am {ts} ist '{name}' im shackspace - {url}", creds)
 
-    for s in series:
+    for s in filter(lambda s: not s['deleted'], series):
         log.debug(s)
         log.debug(f"in announce for series {s['name']}, id {s['id']}")
         hi = choice(hi_list)
